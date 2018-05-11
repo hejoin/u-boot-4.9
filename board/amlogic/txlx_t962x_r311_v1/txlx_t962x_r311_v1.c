@@ -26,9 +26,11 @@
 #include <fdt_support.h>
 #include <libfdt.h>
 #include <asm/cpu_id.h>
+#include <asm/arch/secure_apb.h>
 #ifdef CONFIG_SYS_I2C_AML
 #include <aml_i2c.h>
-#include <asm/arch/secure_apb.h>
+#else
+#include <i2c.h>
 #endif
 #ifdef CONFIG_AML_VPU
 #include <vpu.h>
@@ -267,11 +269,11 @@ struct aml_i2c_platform g_aml_i2c_plat = {
 	.master_no          = AML_I2C_MASTER_AO,
 	.use_pio            = 0,
 	.master_i2c_speed   = AML_I2C_SPPED_400K,
-	.master_ao_pinmux = {
-		.scl_reg    = (unsigned long)MESON_I2C_MASTER_AO_GPIOAO_4_REG,
-		.scl_bit    = MESON_I2C_MASTER_AO_GPIOAO_4_BIT,
-		.sda_reg    = (unsigned long)MESON_I2C_MASTER_AO_GPIOAO_5_REG,
-		.sda_bit    = MESON_I2C_MASTER_AO_GPIOAO_5_BIT,
+	.master_c_pinmux = {
+		.scl_reg    = (unsigned long)MESON_I2C_MASTER_C_GPIOH_2_REG,
+		.scl_bit    = MESON_I2C_MASTER_C_GPIOH_2_BIT,
+		.sda_reg    = (unsigned long)MESON_I2C_MASTER_C_GPIOH_3_REG,
+		.sda_bit    = MESON_I2C_MASTER_C_GPIOH_3_BIT,
 	}
 };
 #if 0
