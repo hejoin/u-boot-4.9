@@ -155,5 +155,9 @@ __weak int  sd_emmc_detect(unsigned port)
 
 __weak void sd_emmc_para_config(unsigned int *reg, unsigned int port)
 {
+	if (port == 1) {
+		*reg &= ~(3 << Cfg_co_phase);
+		*reg |= (1 << Cfg_co_phase);
+	}
 	return;
 }
