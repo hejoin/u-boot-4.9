@@ -595,7 +595,7 @@ static void dsi_phy_init(struct dsi_phy_s *dphy, unsigned char lane_num)
 	}
 }
 
-static void set_dsi_phy_config(struct lcd_config_s *pconf)
+static void set_dsi_phy_config(struct dsi_config_s *dconf)
 {
 	if (lcd_debug_print_flag)
 		LCDPR("%s\n", __func__);
@@ -616,18 +616,13 @@ static void set_dsi_phy_config(struct lcd_config_s *pconf)
 	dsi_host_write(MIPI_DSI_DWC_PHY_RSTZ_OS, 0xf);
 
 	/* Analog */
-	dsi_phy_init(&dsi_phy_config, pconf->lcd_control.mipi_config->lane_num);
+	dsi_phy_init(&dsi_phy_config, dconf->lane_num);
 
 	/* Check the phylock/stopstateclklane to decide if the DPHY is ready */
 	check_phy_status();
 
 	/* Trigger a sync active for esc_clk */
 	dsi_phy_set_mask(MIPI_DSI_PHY_CTRL, (1 << 1));
-
-	/* Startup transfer, default lpclk */
-	dsi_host_write(MIPI_DSI_DWC_LPCLK_CTRL_OS,
-			(0x1 << BIT_AUTOCLKLANE_CTRL) |
-			(0x1 << BIT_TXREQUESTCLKHS));
 }
 
 static void startup_mipi_dsi_host(void)
@@ -649,21 +644,16 @@ static void startup_mipi_dsi_host(void)
 	mdelay(10);
 }
 
-static void set_mipi_dsi_lpclk_ctrl(struct dsi_config_s *dconf,
-		unsigned int operation_mode)
+static void mipi_dsi_lpclk_ctrl(struct dsi_config_s *dconf)
 {
-	unsigned int lpclk = 1;
+	unsigned int lpclk;
 
-	if (operation_mode == OPERATION_VIDEO_MODE) {
-		if (dconf->clk_always_hs) /* clk always hs */
-			lpclk = 0;
-		else /* enable clk lp state */
-			lpclk = 1;
-	} else { /* enable clk lp state */
-		lpclk = 1;
-	}
-	dsi_host_setb(MIPI_DSI_DWC_LPCLK_CTRL_OS,
-			lpclk, BIT_AUTOCLKLANE_CTRL, 1);
+	/* when lpclk = 1, enable clk lp state */
+	lpclk = (dconf->clk_always_hs) ? 0 : 1;
+
+	dsi_host_write(MIPI_DSI_DWC_LPCLK_CTRL_OS,
+		(lpclk << BIT_AUTOCLKLANE_CTRL) |
+		(0x1 << BIT_TXREQUESTCLKHS));
 }
 
 /* *************************************************************
@@ -1879,8 +1869,6 @@ static void mipi_dsi_link_on(struct lcd_config_s *pconf)
 	op_mode_init = dconf->operation_mode_init;
 	op_mode_disp = dconf->operation_mode_display;
 
-	set_mipi_dsi_lpclk_ctrl(dconf, op_mode_init);
-
 	if (dconf->dsi_init_on) {
 		dsi_write_cmd(dconf->dsi_init_on);
 		LCDPR("dsi init on\n");
@@ -1915,7 +1903,6 @@ static void mipi_dsi_link_on(struct lcd_config_s *pconf)
 			    */
 			op_mode_disp, /* DSI operation mode, video or command */
 			pconf);
-		set_mipi_dsi_lpclk_ctrl(dconf, op_mode_disp);
 	}
 }
 
@@ -1941,7 +1928,6 @@ void mipi_dsi_link_off(struct lcd_config_s *pconf)
 			    */
 			op_mode_init, /* DSI operation mode, video or command */
 			pconf);
-		set_mipi_dsi_lpclk_ctrl(dconf, op_mode_init);
 	}
 
 #ifdef CONFIG_AML_LCD_EXTERN
@@ -1952,7 +1938,8 @@ void mipi_dsi_link_off(struct lcd_config_s *pconf)
 		} else {
 			if (lcd_ext->config->table_init_off) {
 				dsi_write_cmd(lcd_ext->config->table_init_off);
-				LCDPR("[extern]%s dsi init off\n", lcd_ext->config->name);
+				LCDPR("[extern]%s dsi init off\n",
+					lcd_ext->config->name);
 			}
 		}
 	}
@@ -2107,8 +2094,10 @@ static void mipi_dsi_host_on(struct lcd_config_s *pconf)
 		0, /* Chroma sub sample, only for YUV 422 or 420, even or odd */
 		op_mode_init, /* DSI operation mode, video or command */
 		pconf);
-	set_dsi_phy_config(pconf);
+	set_dsi_phy_config(pconf->lcd_control.mipi_config);
 
+	/* Startup transfer */
+	mipi_dsi_lpclk_ctrl(pconf->lcd_control.mipi_config);
 	mipi_dsi_link_on(pconf);
 
 	if (lcd_debug_print_flag)
