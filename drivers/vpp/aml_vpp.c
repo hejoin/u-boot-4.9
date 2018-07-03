@@ -28,6 +28,8 @@
 
 #define VPP_PR(fmt, args...)     printf("vpp: "fmt"", ## args)
 
+static unsigned char vpp_init_flag;
+
 /* OSD csc defines */
 
 enum vpp_matrix_sel_e {
@@ -1125,7 +1127,6 @@ static void set_vpp_bitdepth(void)
 	}
 }
 
-#if ((defined CONFIG_AML_HDMITX20) || (defined CONFIG_AML_CVBS))
 static void vpp_set_post_matrix_rgb2ycbcr(int mode)
 {
 	/* enable post matrix */
@@ -1157,7 +1158,6 @@ static void vpp_set_post_matrix_rgb2ycbcr(int mode)
 		vpp_reg_write(VPP_MATRIX_PRE_OFFSET2, 0x0);
 	}
 }
-#endif
 
 /* osd+video brightness */
 static void video_adj2_brightness(int val)
@@ -1293,10 +1293,38 @@ void vpp_pq_load(void)
 	}
 }
 
+void vpp_matrix_update(int type)
+{
+	if (vpp_init_flag == 0)
+		return;
+
+	VPP_PR("%s: %d\n", __func__, type);
+
+	switch (type) {
+	case VPP_CM_RGB:
+		if (get_cpu_id().family_id == MESON_CPU_MAJOR_ID_GXTVBB)
+			break;
+
+		/* 709 limit to RGB */
+		vpp_set_matrix_ycbcr2rgb(2, 3);
+		break;
+	case VPP_CM_YUV:
+		if (get_cpu_id().family_id == MESON_CPU_MAJOR_ID_GXTVBB) {
+			/* RGB to 709 limit */
+			vpp_set_post_matrix_rgb2ycbcr(0);
+		}
+		break;
+	default:
+		break;
+	}
+}
+
 void vpp_init(void)
 {
 	u32 data32;
 	VPP_PR("%s\n", __func__);
+
+	vpp_init_flag = 1;
 
 	/* init vpu fifo control register */
 	data32 = vpp_reg_read(VPP_OFIFO_SIZE);
@@ -1316,11 +1344,6 @@ void vpp_init(void)
 		vpp_set_matrix_ycbcr2rgb(0, 3);
 		/* set dummy data default RGB black */
 		vpp_reg_write(VPP_DUMMY_DATA1, 0x0);
-
-	#if ((defined CONFIG_AML_HDMITX20) || (defined CONFIG_AML_CVBS))
-		/* RGB to 709 limit */
-		vpp_set_post_matrix_rgb2ycbcr(0);
-	#endif
 	} else if (get_cpu_id().family_id == MESON_CPU_MAJOR_ID_GXM) {
 		vpp_reg_setb(VIU_MISC_CTRL1, 0xff, 16, 8);
 		vpp_reg_write(VPP_DOLBY_CTRL, 0x20000);
@@ -1329,19 +1352,11 @@ void vpp_init(void)
 		vpp_reg_write(VPP_DUMMY_DATA1, 0x1020080);
 		/* osd1: rgb->yuv limit , osd2: yuv limit */
 		set_osd1_rgb2yuv(1);
-	#if (defined CONFIG_AML_LCD)
-		/* 709 limit to RGB */
-		vpp_set_matrix_ycbcr2rgb(2, 3);
-	#endif
 	} else if (get_cpu_id().family_id == MESON_CPU_MAJOR_ID_TXL) {
 		/* set dummy data default YUV black */
 		vpp_reg_write(VPP_DUMMY_DATA1, 0x108080);
 		/* osd1: rgb->yuv limit , osd2: yuv limit */
 		set_osd1_rgb2yuv(1);
-	#if (defined CONFIG_AML_LCD)
-		/* 709 limit to RGB */
-		vpp_set_matrix_ycbcr2rgb(2, 3);
-	#endif
 	} else if (get_cpu_id().family_id == MESON_CPU_MAJOR_ID_TXLX) {
 		/* set dummy data default YUV black;*/
 		vpp_reg_write(VPP_DUMMY_DATA1, 0x04080200);
@@ -1349,10 +1364,6 @@ void vpp_init(void)
 		set_osd1_rgb2yuv(1);
 		/* set vpp data path to u10 */
 		set_vpp_bitdepth();
-	#if (defined CONFIG_AML_LCD)
-		/* 709 limit to RGB */
-		vpp_set_matrix_ycbcr2rgb(2, 3);
-	#endif
 	} else if (get_cpu_id().family_id == MESON_CPU_MAJOR_ID_TXHD) {
 		/* set dummy data default YUV black;*/
 		vpp_reg_write(VPP_DUMMY_DATA1, 0x04080200);
@@ -1360,10 +1371,6 @@ void vpp_init(void)
 		set_osd1_rgb2yuv(1);
 		/* set vpp data path to u10 */
 		set_vpp_bitdepth();
-	#if (defined CONFIG_AML_LCD)
-		/* 709 limit to RGB */
-		vpp_set_matrix_ycbcr2rgb(2, 3);
-	#endif
 	} else if (get_cpu_id().family_id == MESON_CPU_MAJOR_ID_G12A) {
 		/* osd1: rgb->yuv limit,osd2: rgb2yuv limit,osd3: rgb2yuv limit*/
 		set_osd1_rgb2yuv(1);
@@ -1372,18 +1379,18 @@ void vpp_init(void)
 
 		/* set vpp data path to u12 */
 		set_vpp_bitdepth();
-	#if (defined CONFIG_AML_LCD)
-		/* 709 limit to RGB */
-		vpp_set_matrix_ycbcr2rgb(2, 3);
-	#endif
+	} else if (get_cpu_id().family_id == MESON_CPU_MAJOR_ID_G12B) {
+		/* osd1: rgb->yuv limit,osd2: rgb2yuv limit,osd3: rgb2yuv limit*/
+		set_osd1_rgb2yuv(1);
+		set_osd2_rgb2yuv(1);
+		set_osd3_rgb2yuv(1);
+
+		/* set vpp data path to u12 */
+		set_vpp_bitdepth();
 	} else {
 		/* set dummy data default YUV black */
 		vpp_reg_write(VPP_DUMMY_DATA1, 0x108080);
 		/* osd1: rgb->yuv limit , osd2: yuv limit */
 		set_osd1_rgb2yuv(1);
-	#if (defined CONFIG_AML_LCD)
-		/* 709 limit to RGB */
-		vpp_set_matrix_ycbcr2rgb(2, 3);
-	#endif
 	}
 }
